@@ -135,10 +135,21 @@
         });
     }
 
-    function resetSystem() { 
-        if(confirm("Xóa hết dữ liệu phòng?")) db.ref('class_room').remove(); 
+function resetSystem() { 
+        if(confirm("Xóa hết dữ liệu phòng (bao gồm cả danh sách học sinh và đáp án)?")) {
+            // 1. Xóa trên Firebase
+            db.ref('class_room').remove().then(() => {
+                // 2. Xóa các ô input đáp án trên giao diện
+                for(let i=0; i<numQ; i++) {
+                    const input = document.getElementById(`key-${i}`);
+                    if(input) input.value = '';
+                }
+                alert("Đã xóa sạch dữ liệu phòng!");
+            }).catch(error => {
+                console.error("Lỗi khi xóa: ", error);
+            });
+        }
     }
-
     db.ref('class_room').on('value', snap => {
         const data = snap.val() || {};
         const tbody = document.getElementById('adminTable');
