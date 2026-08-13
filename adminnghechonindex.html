@@ -6,7 +6,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
     <style>
-        :root { --blue: #1e88e5; --red: #ff6b6b; --dark: #1a1a1a; --white: #fff; }
+        :root { --blue: #1e88e5; --red: #ff6b6b; --orange: #ff9800; --dark: #1a1a1a; --white: #fff; }
         body { background: var(--dark); color: var(--white); font-family: sans-serif; padding: 20px; }
         .panel { background: #2d2d2d; padding: 15px; border-radius: 8px; border: 1px solid var(--blue); margin-bottom: 20px; }
         
@@ -24,6 +24,7 @@
         
         .btn { padding: 8px 15px; cursor: pointer; border: none; border-radius: 4px; font-weight: bold; }
         .btn-add { background: var(--blue); color: white; width: 100%; }
+        .btn-reset-ans { background: var(--orange); color: white; width: 100%; }
         .btn-score { background: #00ff00; color: black; width: 100%; margin-top: 10px; }
         .btn-del { background: var(--red); color: white; padding: 5px; font-size: 10px; }
 
@@ -40,7 +41,8 @@
         <div class="flex-container">
             <textarea id="bulkNames" rows="5" placeholder="Dán danh sách tên tại đây (Mỗi tên một dòng)..."></textarea>
             <button class="btn btn-add" onclick="addBulkPlayers()">THÊM DANH SÁCH HỌC SINH</button>
-            <button class="btn" style="background: #555; color: white;" onclick="resetSystem()">XÓA HẾT DỮ LIỆU PHÒNG</button>
+            <button class="btn btn-reset-ans" onclick="resetAnswersOnly()">XÓA TẤT CẢ ĐÁP ÁN (GIỮ LẠI HỌC SINH)</button>
+            <button class="btn" style="background: #555; color: white;" onclick="resetSystem()">XÓA HẾT DỮ LIỆU PHÒNG (BAO GỒM HỌC SINH)</button>
         </div>
     </div>
 
@@ -135,11 +137,44 @@
         });
     }
 
-function resetSystem() { 
+    // HÀM CHỈ XÓA ĐÁP ÁN VÀ RESET ĐIỂM (GIỮ DANH SÁCH HỌC SINH)
+    function resetAnswersOnly() {
+        if(confirm("Bạn có chắc muốn xóa toàn bộ đáp án và reset điểm về 0 (Danh sách học sinh vẫn được giữ lại)?")) {
+            db.ref('class_room').once('value', snap => {
+                const data = snap.val() || {};
+                const updates = {};
+                
+                // 1. Xóa các node đáp án và trạng thái khóa
+                updates['class_room/answers'] = null;
+                updates['class_room/correct_keys'] = null;
+                updates['class_room/finalized'] = null;
+
+                // 2. Reset điểm số của tất cả học sinh về 0
+                if(data.players) {
+                    for(let id in data.players) {
+                        updates[`class_room/players/${id}/score`] = 0;
+                    }
+                }
+
+                // 3. Cập nhật lên Firebase
+                db.ref().update(updates).then(() => {
+                    // Xóa trắng các ô nhập đáp án đúng trên giao diện
+                    for(let i=0; i<numQ; i++) {
+                        const input = document.getElementById(`key-${i}`);
+                        if(input) input.value = '';
+                    }
+                    alert("Đã xóa toàn bộ đáp án và reset điểm thành công!");
+                }).catch(error => {
+                    console.error("Lỗi khi xóa đáp án: ", error);
+                });
+            });
+        }
+    }
+
+    // HÀM XÓA SẠCH PHÒNG THI (XÓA CẢ HỌC SINH)
+    function resetSystem() { 
         if(confirm("Xóa hết dữ liệu phòng (bao gồm cả danh sách học sinh và đáp án)?")) {
-            // 1. Xóa trên Firebase
             db.ref('class_room').remove().then(() => {
-                // 2. Xóa các ô input đáp án trên giao diện
                 for(let i=0; i<numQ; i++) {
                     const input = document.getElementById(`key-${i}`);
                     if(input) input.value = '';
@@ -150,6 +185,7 @@ function resetSystem() {
             });
         }
     }
+
     db.ref('class_room').on('value', snap => {
         const data = snap.val() || {};
         const tbody = document.getElementById('adminTable');
@@ -159,6 +195,8 @@ function resetSystem() {
             const input = document.getElementById(`key-${i}`);
             if(data.correct_keys?.[i] && document.activeElement !== input) {
                 input.value = data.correct_keys[i];
+            } else if (!data.correct_keys?.[i] && document.activeElement !== input) {
+                input.value = '';
             }
         }
 
