@@ -6,7 +6,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
     <style>
-        :root { --blue: #1e88e5; --red: #ff6b6b; --orange: #ff9800; --dark: #1a1a1a; --white: #fff; }
+        :root { --blue: #1e88e5; --red: #ff6b6b; --orange: #ff9800; --dark: #1a1a1a; --white: #fff; --peach: #ffb7b2; }
         body { background: var(--dark); color: var(--white); font-family: sans-serif; padding: 20px; }
         .panel { background: #2d2d2d; padding: 15px; border-radius: 8px; border: 1px solid var(--blue); margin-bottom: 20px; }
         
@@ -18,17 +18,31 @@
 
         textarea { width: 100%; box-sizing: border-box; margin-bottom: 10px; text-transform: none; resize: vertical; }
         
+        /* Khung chứa bảng có thanh trượt ngang */
+        .container { overflow-x: auto; background: #2d2d2d; padding: 15px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+
         table { width: 100%; border-collapse: collapse; min-width: 2800px; }
         th, td { border: 1px solid #444; padding: 10px; text-align: center; text-transform: uppercase; }
-        th { background: var(--blue); font-size: 0.8rem; }
         
+        th { background: var(--blue); font-size: 0.8rem; position: sticky; top: 0; z-index: 3; }
+        
+        /* Cố định các cột bên trái khi cuộn ngang */
+        .col-del { width: 50px; position: sticky; left: 0; background: #111; z-index: 2; }
+        .col-name { width: 180px; text-align: left; padding-left: 15px; position: sticky; left: 50px; background: #111; z-index: 2; }
+        .col-score { width: 80px; color: #00ff00; font-weight: bold; position: sticky; left: 230px; background: #111; z-index: 2; }
+
+        /* Đảm bảo các ô dữ liệu td thuộc các cột cố định có màu nền khi cuộn */
+        td.col-del { background: #1a1a1a; }
+        td.col-name { background: #1a1a1a; text-align: left; padding-left: 15px; }
+        td.col-score { background: #1a1a1a; color: #00ff00; font-weight: bold; }
+
         .btn { padding: 8px 15px; cursor: pointer; border: none; border-radius: 4px; font-weight: bold; }
         .btn-add { background: var(--blue); color: white; width: 100%; }
         .btn-reset-ans { background: var(--orange); color: white; width: 100%; }
         .btn-score { background: #00ff00; color: black; width: 100%; margin-top: 10px; }
-        .btn-del { background: var(--red); color: white; padding: 5px; font-size: 10px; }
+        .btn-del { background: var(--red); color: white; padding: 5px; font-size: 10px; width: 100%; }
 
-        .admin-correct { background-color: rgba(0, 255, 0, 0.2); color: #00ff00; font-weight: bold; }
+        .admin-correct { background-color: rgba(0, 255, 0, 0.2) !important; color: #00ff00; font-weight: bold; }
         .flex-container { display: flex; flex-direction: column; gap: 10px; }
     </style>
 </head>
@@ -52,19 +66,18 @@
         <button class="btn btn-score" onclick="finalize()">CÔNG BỐ & CHẤM ĐIỂM</button>
     </div>
 
-    <table>
-        <thead>
-            <tr>
-                <th>Xóa</th>
-                <th>Học sinh</th>
-                <th>Điểm</th>
-                <script>
-                    for(let i=1; i<=15; i++) document.write(`<th>${i}</th>`);
-                </script>
-            </tr>
-        </thead>
-        <tbody id="adminTable"></tbody>
-    </table>
+    <div class="container">
+        <table>
+            <thead>
+                <tr id="headerRow">
+                    <th class="col-del">Xóa</th>
+                    <th class="col-name">Học sinh</th>
+                    <th class="col-score">Điểm</th>
+                </tr>
+            </thead>
+            <tbody id="adminTable"></tbody>
+        </table>
+    </div>
 
 <script>
     const firebaseConfig = {
@@ -80,11 +93,22 @@
     const db = firebase.database();
     const numQ = 40;
 
+    // Tạo các ô nhập đáp án đúng từ 1 đến 40
     let keyHtml = '';
     for(let i=0; i<numQ; i++) {
         keyHtml += `Q${i+1}: <input type="text" style="width:30px; margin-bottom:5px" id="key-${i}" oninput="setKey(${i}, this.value)"> `;
     }
     document.getElementById('ansKeys').innerHTML = keyHtml;
+
+    // Tạo tiêu đề các cột câu hỏi (1 -> 40) cho bảng
+    function createHeader() {
+        const headerRow = document.getElementById('headerRow');
+        for(let i=1; i<=numQ; i++) {
+            const th = document.createElement('th');
+            th.innerText = i;
+            headerRow.appendChild(th);
+        }
+    }
 
     function setKey(i, val) { 
         db.ref(`class_room/correct_keys/${i}`).set(val.toLowerCase()); 
@@ -144,21 +168,17 @@
                 const data = snap.val() || {};
                 const updates = {};
                 
-                // 1. Xóa các node đáp án và trạng thái khóa
                 updates['class_room/answers'] = null;
                 updates['class_room/correct_keys'] = null;
                 updates['class_room/finalized'] = null;
 
-                // 2. Reset điểm số của tất cả học sinh về 0
                 if(data.players) {
                     for(let id in data.players) {
                         updates[`class_room/players/${id}/score`] = 0;
                     }
                 }
 
-                // 3. Cập nhật lên Firebase
                 db.ref().update(updates).then(() => {
-                    // Xóa trắng các ô nhập đáp án đúng trên giao diện
                     for(let i=0; i<numQ; i++) {
                         const input = document.getElementById(`key-${i}`);
                         if(input) input.value = '';
@@ -193,18 +213,20 @@
         
         for(let i=0; i<numQ; i++) {
             const input = document.getElementById(`key-${i}`);
-            if(data.correct_keys?.[i] && document.activeElement !== input) {
-                input.value = data.correct_keys[i];
-            } else if (!data.correct_keys?.[i] && document.activeElement !== input) {
-                input.value = '';
+            if(input) {
+                if(data.correct_keys?.[i] && document.activeElement !== input) {
+                    input.value = data.correct_keys[i];
+                } else if (!data.correct_keys?.[i] && document.activeElement !== input) {
+                    input.value = '';
+                }
             }
         }
 
         for(let id in data.players) {
             let row = `<tr>
-                <td><button class="btn-del" onclick="deletePlayer('${id}')">X</button></td>
-                <td style="text-align:left">${data.players[id].name}</td>
-                <td style="color:#00ff00; font-weight:bold">${data.players[id].score || 0}</td>`;
+                <td class="col-del"><button class="btn-del" onclick="deletePlayer('${id}')">X</button></td>
+                <td class="col-name">${data.players[id].name}</td>
+                <td class="col-score">${data.players[id].score || 0}</td>`;
             
             for(let i=0; i<numQ; i++) {
                 const studentAns = data.answers?.[id]?.[i] || '';
@@ -216,6 +238,8 @@
             tbody.innerHTML += row + `</tr>`;
         }
     });
+
+    createHeader();
 </script>
 </body>
 </html>
