@@ -18,7 +18,7 @@
 
         textarea { width: 100%; box-sizing: border-box; margin-bottom: 10px; text-transform: none; resize: vertical; }
         
-        table { width: 100%; border-collapse: collapse; }
+        table { width: 100%; border-collapse: collapse; min-width: 2800px; }
         th, td { border: 1px solid #444; padding: 10px; text-align: center; text-transform: uppercase; }
         th { background: var(--blue); font-size: 0.8rem; }
         
@@ -78,7 +78,7 @@
     };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
-    const numQ = 15;
+    const numQ = 40;
 
     let keyHtml = '';
     for(let i=0; i<numQ; i++) {
